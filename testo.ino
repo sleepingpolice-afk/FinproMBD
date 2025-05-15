@@ -10,7 +10,6 @@ extern "C"
 void setup()
 {
   SPI_MAX7219_init();
-  MAX7219_disp_digits();
 }
 //----------------------------------------------
 void loop(){}

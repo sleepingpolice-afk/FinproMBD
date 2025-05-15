@@ -2,16 +2,67 @@
 #define __SFR_OFFSET 0x00
 #include "avr/io.h"
 ;=======================
-.global SPI_MAX7219_init
-.global MAX7219_disp_digits
+.global main
 
 ;=======================
 .equ SCK, 5
 .equ MOSI, 3
 .equ SS, 2
 
+MAX7219_disp_digits2:
+loop_forever2:
+    LDI R24, 0          ; display index = 0
+    LDI R25, 0          ; digit pattern index = 0
+disp_loop2:
+    LDI R26, 8          ; 8 rows per digit
+    LDI R30, lo8(digit4)
+    LDI R31, hi8(digit4)
+    MUL R25, R26        ; offset = digit index * 8
+    ADD R30, R0
+    ADC R31, R1
+
+    LDI R17, 1          ; digit register = 1
+row_loop2:
+    LPM R18, Z+
+    MOV R20, R24        ; target display = R24
+    RCALL send_bytes_chain
+    INC R17
+    DEC R26
+    BRNE row_loop2
+
+    INC R24             ; next display
+    INC R25             ; next digit
+    CPI R24, 4
+    BRNE disp_loop2
+
+    RCALL my_delay
+    ;RJMP loop_forever2
+    RET
+
 ;=======================
-SPI_MAX7219_init:
+
+
+digit4:
+.byte 0b00000000,0b00010000,0b00110000,0b01010000
+.byte 0b10010000,0b11111110,0b00010000,0b00000000
+
+digit5:
+.byte 0b00000000,0b01111110,0b01000000,0b01111100
+.byte 0b00000010,0b00000010,0b01111100,0b00000000
+
+digit6:
+.byte 0b00000000,0b00111000,0b01000000,0b01111100
+.byte 0b01000010,0b01000010,0b00111000,0b00000000
+
+
+digit7:
+.byte 0b00000000,0b01111110,0b00000000,0b00000000
+.byte 0b10000001,0b00000000,0b00000000,0b00000000
+
+
+
+;=======================
+main:
     LDI R17, (1<<MOSI)|(1<<SCK)|(1<<SS)
     OUT DDRB, R17             ; Set MOSI, SCK, SS as output
     LDI R17, (1<<SPE)|(1<<MSTR)|(1<<SPR0)
@@ -44,7 +95,12 @@ init_loop:
     CPI R20, 4
     BRNE init_loop
 
-    RET
+again:
+    RCALL MAX7219_disp_digits1
+    RCALL my_delay
+    RCALL MAX7219_disp_digits2
+    RCALL my_delay
+    jmp again
 
 ;=======================
 ; Send command/data to 1 of 4 displays in chain
@@ -100,7 +156,7 @@ d3: DEC R23
     RET
 
 ;=======================
-MAX7219_disp_digits:
+MAX7219_disp_digits1:
 loop_forever:
     LDI R24, 0          ; display index = 0
     LDI R25, 0          ; digit pattern index = 0
@@ -127,21 +183,22 @@ row_loop:
     BRNE disp_loop
 
     RCALL my_delay
-    RJMP loop_forever
+    ;RJMP loop_forever
+    RET
 
 ;=======================
 digit0:
-.byte 0b00000000,0b00011000,0b00100100,0b00100100
-.byte 0b00100100,0b00100100,0b00011000,0b00000000
+.byte 0b00000000,0b01010101,0b10101010,0b01010101
+.byte 0b10101010,0b01010101,0b00000000,0b00000000
 
 digit1:
-.byte 0b00000000,0b00001000,0b00011000,0b00001000
-.byte 0b00001000,0b00001000,0b00011100,0b00000000
+.byte 0b00000000,0b01111100,0b01000010,0b01000010
+.byte 0b01111100,0b01001000,0b01000100,0b00000000
 
 digit2:
-.byte 0b00000000,0b00011000,0b00100100,0b00001000
-.byte 0b00010000,0b00100000,0b00111100,0b00000000
+.byte 0b00000000,0b01111110,0b00011000,0b00011000
+.byte 0b00011000,0b00011000,0b01111110,0b00000000
 
 digit3:
-.byte 0b00000000,0b00111000,0b00000100,0b00111000
-.byte 0b00000100,0b00000100,0b00111000,0b00000000
+.byte 0b00000000,0b00011100,0b00100010,0b00100010
+.byte 0b00111110,0b00100010,0b00100010,0b00000000
