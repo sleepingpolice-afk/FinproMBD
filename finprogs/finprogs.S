@@ -108,6 +108,8 @@ wait_ADC:
     ;------------------------------------------------------------------
     LDS   R16, ADCL       ;get low-byte result from ADCL
     LDS   R25, ADCH       ;get high-byte result from ADCH
+
+    PUSH  R25
     ;-----------------------------------------------------------------
     ADD   R25, R23        ;add 48 to byte to get ASCII char 0 to 9
     ;-----------------------------------------------------------------
@@ -222,10 +224,23 @@ skip:
 
 
 
+
 agn:
+    POP R25
+    CPI R25, 10        ; Compare ADC high byte with 3
+    BRLO ldr_dark     ; If less than 3, branch to DARK display
+    JMP skippp
+ldr_dark:
+    RCALL MAX7219_disp_digits3
+    JMP skip_lagi
+
+skippp:
     RCALL MAX7219_disp_digits2
+
+skip_lagi:
     RCALL print_msg_ADC
     RCALL print_ADC
+
     RCALL delay_2s          ; wait for DHT11 to get ready
 ;-----------------------------------------------------------------
     ; Send Start Signal to DHT11
@@ -275,6 +290,7 @@ pos_0_deg:
     LDI   R24, 40         ; PWM pulse width for 0 degrees
     RCALL  rotate_servo
     RJMP complete
+
 
 complete:
     RJMP agn                ; Add this to create the infinite loop
@@ -545,6 +561,57 @@ digit2:
 digit3:
 .byte 0b00000000,0b00011100,0b00100010,0b00100010
 .byte 0b00111110,0b00100010,0b00100010,0b00000000
+
+
+
+
+
+MAX7219_disp_digits3:
+loop_forever4:
+    LDI R24, 0          ; display index = 0
+    LDI R25, 0          ; digit pattern index = 0
+disp_loop4:
+    LDI R26, 8          ; 8 rows per digit
+    LDI R30, lo8(digit8)
+    LDI R31, hi8(digit8)
+    MUL R25, R26        ; offset = digit index * 8
+    ADD R30, R0
+    ADC R31, R1
+
+    LDI R17, 1          ; digit register = 1
+row_loop4:
+    LPM R18, Z+
+    MOV R20, R24        ; target display = R24
+    RCALL send_bytes_chain
+    INC R17
+    DEC R26
+    BRNE row_loop4
+
+    INC R24             ; next display
+    INC R25             ; next digit
+    CPI R24, 4
+    BRNE disp_loop4
+
+    RCALL myDelay
+    ;RJMP loop_forever
+    RET
+
+;=======================
+digit8:   ; K
+.byte 0b00000000,0b01000010,0b01000100,0b01001000
+.byte 0b01110000,0b01001000,0b01000100,0b00000000
+
+digit9:   ; R
+.byte 0b00000000,0b01111100,0b01000010,0b01111100
+.byte 0b01001000,0b01000100,0b01000010,0b00000000
+
+digit10:  ; A
+.byte 0b00000000,0b00011000,0b00100100,0b01000010
+.byte 0b01111110,0b01000010,0b01000010,0b00000000
+
+digit11:  ; D
+.byte 0b00000000,0b01111100,0b01000010,0b01000010
+.byte 0b01000010,0b01000010,0b01111100,0b00000000
 
 
 print_msg_ADC:
