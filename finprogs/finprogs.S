@@ -2,6 +2,11 @@
 #include "avr/io.h"
 
 .global main
+.equ SCK, 5
+.equ MOSI, 3
+.equ SS, 2
+
+
 ;===============================================================
 main:
     CLR   R24
@@ -19,6 +24,39 @@ main:
     STS   ADMUX, R20
     LDI   R20, 0x87 
     STS   ADCSRA, R20
+
+    LDI R17, (1<<MOSI)|(1<<SCK)|(1<<SS)
+    OUT DDRB, R17             ; Set MOSI, SCK, SS as output
+    LDI R17, (1<<SPE)|(1<<MSTR)|(1<<SPR0)
+    OUT SPCR, R17     
+
+    
+    init_loop:
+    ; Intensity
+    LDI R17, 0x0A
+    LDI R18, 0x03
+    RCALL send_bytes_chain
+
+    ; Decode mode off
+    LDI R17, 0x09
+    LDI R18, 0x00
+    RCALL send_bytes_chain
+
+    ; Scan limit = all 8 digits
+    LDI R17, 0x0B
+    LDI R18, 0x07
+    RCALL send_bytes_chain
+
+    ; Shutdown mode off
+    LDI R17, 0x0C
+    LDI R18, 0x01
+    RCALL send_bytes_chain
+
+    INC R20
+    CPI R20, 4
+    BRNE init_loop
+
+
     
     SBI   DDRB, 4
     RJMP agn                            ; Jump to agn to start the loop
@@ -41,17 +79,17 @@ main:
 ;     RCALL myDelay   ; Adds delay around 0.5s on each loop just in case for unintended behavior
 ;     RET
 
-; myDelay:          ; Nested loop subroutine
-;     LDI R23, 255  ; Outer loop counter
-; l10: LDI R24, 255  ; mid loop counte
-; l11: LDI R25, 41   ; inner loop counter to give 0.5s delay
-; l12: DEC R25       ; decrement inner loop
-;     BRNE l12       ; loop if not zero
-;     DEC R24       ; decrement mid loop
-;     BRNE l11       ; loop if not zero
-;     DEC R23       ; decrement outer loop
-;     BRNE l10       ; loop if not zero
-;     RET           ; return to caller
+myDelay:          ; Nested loop subroutine
+    LDI R23, 255  ; Outer loop counter
+l10: LDI R24, 255  ; mid loop counte
+l11: LDI R25, 41   ; inner loop counter to give 0.5s delay
+l12: DEC R25       ; decrement inner loop
+    BRNE l12       ; loop if not zero
+    DEC R24       ; decrement mid loop
+    BRNE l11       ; loop if not zero
+    DEC R23       ; decrement outer loop
+    BRNE l10       ; loop if not zero
+    RET           ; return to caller
 
 print_ADC:
     LDI   R23, 48         ;constants used to get ASCII values
@@ -145,7 +183,47 @@ l83: DEC   R22
     RET
 
 
+send_bytes_chain:
+    CBI PORTB, SS
+
+    LDI R19, 3         ; 3 = leftmost chip
+send_loop:
+    CP R19, R20
+    BREQ send_cmd_data
+
+    ; Else send NOOP
+    LDI R21, 0x00
+    OUT SPDR, R21
+wait1: IN R22, SPSR
+    SBRS R22, SPIF
+    RJMP wait1
+    OUT SPDR, R21
+wait2: IN R22, SPSR
+    SBRS R22, SPIF
+    RJMP wait2
+    RJMP skip
+
+send_cmd_data:
+    OUT SPDR, R17
+wait3: IN R22, SPSR
+    SBRS R22, SPIF
+    RJMP wait3
+    OUT SPDR, R18
+wait4: IN R22, SPSR
+    SBRS R22, SPIF
+    RJMP wait4
+
+skip:
+    DEC R19
+    BRPL send_loop
+
+    SBI PORTB, SS
+    RET
+
+
+
 agn:
+    RCALL MAX7219_disp_digits2
     RCALL print_msg_ADC
     RCALL print_ADC
     RCALL delay_2s          ; wait for DHT11 to get ready
@@ -189,6 +267,7 @@ w3: SBIC PINB, 1
 
 pos_180_deg:
     LDI   R24, 180        ; PWM pulse width for 180 degrees
+    RCALL MAX7219_disp_digits1
     RCALL  rotate_servo
     RJMP complete
 
@@ -360,6 +439,113 @@ A_F_D1:
 A_F_D0:
     SUBI  R16, -7                       ;R16 = R16 - (7) = R16 + 7
     JMP  l21
+
+
+MAX7219_disp_digits2:
+loop_forever2:
+    LDI R24, 0          ; display index = 0
+    LDI R25, 0          ; digit pattern index = 0
+disp_loop2:
+    LDI R26, 8          ; 8 rows per digit
+    LDI R30, lo8(digit4)
+    LDI R31, hi8(digit4)
+    MUL R25, R26        ; offset = digit index * 8
+    ADD R30, R0
+    ADC R31, R1
+
+    LDI R17, 1          ; digit register = 1
+row_loop2:
+    LPM R18, Z+
+    MOV R20, R24        ; target display = R24
+    RCALL send_bytes_chain
+    INC R17
+    DEC R26
+    BRNE row_loop2
+
+    INC R24             ; next display
+    INC R25             ; next digit
+    CPI R24, 4
+    BRNE disp_loop2
+
+    RCALL myDelay
+    ;RJMP loop_forever2
+    RET
+
+;=======================
+
+
+
+
+
+digit4:  ; E
+.byte 0b00000000,0b01111110,0b01000000,0b01111000
+.byte 0b01000000,0b01000000,0b01111110,0b00000000
+
+digit5:  ; L
+.byte 0b00000000,0b01000000,0b01000000,0b01000000
+.byte 0b01000000,0b01000000,0b01111110,0b00000000
+
+
+digit6:  ; D
+.byte 0b00000000,0b01111100,0b01000100,0b01000010
+.byte 0b01000010,0b01000100,0b01111100,0b00000000
+
+
+digit7:  ; I
+.byte 0b00000000,0b00011000,0b00011000,0b00011000
+.byte 0b00011000,0b00011000,0b00011000,0b00000000
+
+
+
+
+
+MAX7219_disp_digits1:
+loop_forever:
+    LDI R24, 0          ; display index = 0
+    LDI R25, 0          ; digit pattern index = 0
+disp_loop:
+    LDI R26, 8          ; 8 rows per digit
+    LDI R30, lo8(digit0)
+    LDI R31, hi8(digit0)
+    MUL R25, R26        ; offset = digit index * 8
+    ADD R30, R0
+    ADC R31, R1
+
+    LDI R17, 1          ; digit register = 1
+row_loop:
+    LPM R18, Z+
+    MOV R20, R24        ; target display = R24
+    RCALL send_bytes_chain
+    INC R17
+    DEC R26
+    BRNE row_loop
+
+    INC R24             ; next display
+    INC R25             ; next digit
+    CPI R24, 4
+    BRNE disp_loop
+
+    RCALL myDelay
+    ;RJMP loop_forever
+    RET
+
+;=======================
+digit0:
+.byte 0b00000000,0b01010101,0b10101010,0b01010101
+.byte 0b10101010,0b01010101,0b00000000,0b00000000
+
+digit1:
+.byte 0b00000000,0b01111100,0b01000010,0b01000010
+.byte 0b01111100,0b01001000,0b01000100,0b00000000
+
+digit2:
+.byte 0b00000000,0b01111110,0b00011000,0b00011000
+.byte 0b00011000,0b00011000,0b01111110,0b00000000
+
+digit3:
+.byte 0b00000000,0b00011100,0b00100010,0b00100010
+.byte 0b00111110,0b00100010,0b00100010,0b00000000
+
 
 print_msg_ADC:
     LDI   R30, lo8(messagesADC)
