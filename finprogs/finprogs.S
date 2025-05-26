@@ -108,8 +108,6 @@ wait_ADC:
     ;------------------------------------------------------------------
     LDS   R16, ADCL       ;get low-byte result from ADCL
     LDS   R25, ADCH       ;get high-byte result from ADCH
-
-    PUSH  R25
     ;-----------------------------------------------------------------
     ADD   R25, R23        ;add 48 to byte to get ASCII char 0 to 9
     ;-----------------------------------------------------------------
@@ -224,7 +222,6 @@ skip:
 
 
 
-
 agn:
     POP R25
     CPI R25, 10        ; Compare ADC high byte with 3
@@ -290,7 +287,6 @@ pos_0_deg:
     LDI   R24, 40         ; PWM pulse width for 0 degrees
     RCALL  rotate_servo
     RJMP complete
-
 
 complete:
     RJMP agn                ; Add this to create the infinite loop
@@ -562,10 +558,6 @@ digit3:
 .byte 0b00000000,0b00011100,0b00100010,0b00100010
 .byte 0b00111110,0b00100010,0b00100010,0b00000000
 
-
-
-
-
 MAX7219_disp_digits3:
 loop_forever4:
     LDI R24, 0          ; display index = 0
@@ -613,7 +605,6 @@ digit11:  ; D
 .byte 0b00000000,0b01111100,0b01000010,0b01000010
 .byte 0b01000010,0b01000010,0b01111100,0b00000000
 
-
 print_msg_ADC:
     LDI   R30, lo8(messagesADC)
     LDI   R31, hi8(messagesADC)            ;Z points to string message
@@ -644,4 +635,3 @@ LCD_buffer:
 
     messagesDHT:
     .ascii "DHT:"                       ; String to print
-    .byte 10, 13, 0                      
